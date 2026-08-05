@@ -1,36 +1,158 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# operek
 
-## Getting Started
+Tempat jual beli barang bekas khusus mahasiswa dan alumni di Surabaya. Buku,
+perlengkapan kos, elektronik, sepeda, dan lainnya.
 
-First, run the development server:
+## Tech stack
+
+| Bagian | Dipakai |
+| --- | --- |
+| Framework | Next.js 16.3.0 (App Router, Turbopack) |
+| UI | React 19, TypeScript, Tailwind CSS v4 |
+| Ikon | lucide-react |
+| Font | Plus Jakarta Sans lewat `next/font/google` |
+| Backend | Supabase (Auth, Postgres, Storage) |
+| Pembayaran | Paymenku, QRIS saja |
+
+Desain diambil dari Figma, file key `tRGivMBE3q8G5zzSa0tCXq`.
+
+## Menjalankan
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Aplikasi jalan di [http://localhost:3001](http://localhost:3001).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Perintah | Fungsi |
+| --- | --- |
+| `pnpm dev` | Server pengembangan di port 3001 |
+| `pnpm build` | Build produksi |
+| `pnpm start` | Server produksi di port 3001 |
+| `pnpm lint` | ESLint |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Konfigurasi awal
 
-## Learn More
+### 1. Environment
 
-To learn more about Next.js, take a look at the following resources:
+Salin `.env.local.example` jadi `.env.local`, lalu isi:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+PAYMENKU_SECRET_KEY=
+PAYMENKU_WEBHOOK_SECRET=
+NEXT_PUBLIC_APP_URL=http://localhost:3001
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`NEXT_PUBLIC_APP_URL` hanya dipakai untuk URL redirect Paymenku setelah bayar.
+Karena berawalan `NEXT_PUBLIC_`, nilainya ditanam saat build, jadi setelah
+diubah perlu build ulang, tidak cukup restart.
 
-## Deploy on Vercel
+### 2. Database
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Jalankan `supabase/schema.sql` di SQL editor Supabase. Isinya tabel, index,
+trigger pembuat profil, bucket storage, dan penguncian akses.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Kalau pendaftaran akun gagal dengan error 500, jalankan
+`supabase/repair-signup.sql`. Penyebabnya trigger `on_auth_user_created`
+dijalankan oleh role `supabase_auth_admin`, sedangkan `revoke all` di akhir
+schema memutus jalurnya. File itu memasang `search_path`, kepemilikan definer,
+dan grant yang dibutuhkan.
+
+### 3. Supabase Auth
+
+Di dashboard, buka Authentication lalu URL Configuration:
+
+- Site URL: alamat aplikasi
+- Redirect URLs: tambahkan `https://domainmu.com/**`
+
+Tanpa ini, link konfirmasi email dan reset kata sandi akan diarahkan balik ke
+Site URL, bukan ke halaman yang benar.
+
+### 4. Paymenku
+
+Arahkan webhook ke `https://domainmu.com/api/paymenku-webhook`, lalu isi
+`PAYMENKU_WEBHOOK_SECRET` dengan nilai yang sama. Request tanpa tanda tangan
+yang cocok akan ditolak.
+
+### 5. Domain non-localhost saat development
+
+Kalau server dev diakses lewat domain, bukan localhost, tambahkan domainnya ke
+`allowedDevOrigins` di `next.config.ts`, lalu restart. Tanpa itu Next.js
+memblokir permintaan ke resource dev seperti HMR.
+
+## Struktur
+
+```
+app/
+  (auth)/          login, register, forgot-password
+  (main)/          beranda, discover, product, sell, cart,
+                   inbox, notifications, transactions, profile, settings
+  auth/callback/   tukar kode dari email jadi sesi
+  api/             webhook Paymenku
+  payment/         halaman hasil pembayaran
+components/
+  layout/          header dan navigasi
+  listings/        kartu produk
+  ui/              tombol, input, kartu, badge, state kosong
+lib/
+  supabase/        client browser, server, dan service role
+  actions.ts       Server Actions
+  data.ts          query baca
+  notifications.ts feed notifikasi turunan
+  paymenku.ts      pembuatan invoice
+supabase/          schema.sql dan repair-signup.sql
+proxy.ts           penyegaran sesi dan penjaga rute
+```
+
+Setiap segmen rute punya `loading.tsx` dan `error.tsx`.
+
+## Catatan arsitektur
+
+**Akses data lewat service role.** `schema.sql` mencabut hak anon dan
+authenticated dari semua tabel di schema public, jadi database tidak bisa
+disentuh langsung pakai cURL atau Postman dengan kunci publik. Semua query
+jalan di server lewat Server Component dan Server Action memakai
+`SUPABASE_SERVICE_ROLE_KEY`. Client browser hanya dipakai untuk autentikasi.
+
+**`proxy.ts`, bukan `middleware.ts`.** Next.js 16 mengganti nama konvensi ini.
+Isinya penyegaran cookie sesi dan penjagaan rute yang butuh login.
+
+**Chat memakai polling, bukan Realtime.** Realtime mengirim baris ke browser
+memakai hak akses milik client, sedangkan hak itu sudah dicabut. Thread pesan
+menyegarkan Server Component tiap 5 detik. Kalau suatu saat penguncian
+dilonggarkan khusus tabel `messages`, publikasi Realtime-nya sudah disiapkan di
+schema.
+
+**Notifikasi diturunkan dari data lain.** Tidak ada tabel `notifications`.
+Feed dirakit dari pesan masuk, penjualan, pembayaran, dan iklan yang disimpan
+orang.
+
+**Biaya platform 3 persen** ditambahkan di atas harga barang saat checkout.
+Satu keranjang menghasilkan satu invoice Paymenku dan satu baris transaksi per
+penjual.
+
+## Alur pembayaran
+
+1. Checkout membuat baris transaksi berstatus `pending` dan satu invoice QRIS.
+2. Pembeli membayar di halaman Paymenku.
+3. Webhook `PAYMENT_SUCCEEDED` mengubah status jadi `diproses`, menonaktifkan
+   iklan, dan mengosongkan keranjang pembeli.
+4. Webhook `PAYMENT_FAILED` mengubah status jadi `dibatalkan`.
+5. Pembeli menekan konfirmasi terima, status jadi `selesai`, lalu bisa memberi
+   ulasan.
+
+Pengiriman ada dua pilihan, ketemuan langsung (COD) dan pengiriman mandiri.
+Ongkir pengiriman mandiri tidak ditanggung aplikasi.
+
+## Data acuan
+
+- Kampus terbatas pada delapan perguruan tinggi di Surabaya, lihat `CAMPUSES`
+  di `lib/utils.ts`
+- Kategori: Buku, Elektronik, Furnitur, Sepeda, Pakaian, Lainnya
+- Kondisi: Seperti Baru, Bagus, Cukup Baik, Bekas
+- Status akun: Mahasiswa Aktif atau Alumni, keduanya setara tanpa pembatasan
+  domain email
