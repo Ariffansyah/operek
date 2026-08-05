@@ -27,10 +27,12 @@ export function Header({
   profile,
   cartCount,
   unreadMessages,
+  unreadNotifications,
 }: {
   profile: Profile | null;
   cartCount: number;
   unreadMessages: number;
+  unreadNotifications: number;
 }) {
   const firstName = profile?.full_name?.split(" ")[0] ?? "Akun";
 
@@ -46,7 +48,7 @@ export function Header({
           <IconLink
             href="/inbox"
             label="Pesan"
-            dot={unreadMessages > 0}
+            count={unreadMessages}
             className="hidden sm:inline-flex"
           >
             <MessageSquare className="size-5" />
@@ -54,7 +56,7 @@ export function Header({
           <IconLink
             href="/notifications"
             label="Notifikasi"
-            dot
+            count={unreadNotifications}
             className="hidden sm:inline-flex"
           >
             <Bell className="size-5" />
@@ -90,25 +92,27 @@ export function Header({
 function IconLink({
   href,
   label,
-  dot,
+  count = 0,
   className,
   children,
 }: {
   href: string;
   label: string;
-  dot?: boolean;
+  count?: number;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
-      aria-label={label}
+      aria-label={count > 0 ? `${label} (${count} belum dibaca)` : label}
       className={`relative rounded-full p-2 text-gray-600 hover:bg-gray-100 ${className ?? ""}`}
     >
       {children}
-      {dot && (
-        <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent-500" />
+      {count > 0 && (
+        <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-white">
+          {count > 99 ? "99+" : count}
+        </span>
       )}
     </Link>
   );

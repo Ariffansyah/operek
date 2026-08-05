@@ -200,6 +200,18 @@ export async function getSavedIds(userId: string) {
   return new Set((data ?? []).map((r) => r.listing_id as string));
 }
 
+export async function getSavedListings(userId: string) {
+  const { data } = await admin
+    .from("saved_listings")
+    .select(`listing_id, listing:listings(${LISTING_WITH_SELLER})`)
+    .eq("user_id", userId);
+
+  return (data ?? [])
+    .map((row) => row.listing as unknown as Listing | null)
+    .filter((listing): listing is Listing => Boolean(listing))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 export async function getReviews(profileId: string) {
   const { data } = await admin
     .from("reviews")

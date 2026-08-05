@@ -12,7 +12,6 @@ export type Profile = {
     messages: boolean;
     listings: boolean;
     sales: boolean;
-    newsletter: boolean;
   };
   created_at: string;
 };

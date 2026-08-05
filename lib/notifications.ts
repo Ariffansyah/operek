@@ -11,7 +11,57 @@ export type Feed = {
   href: string;
 };
 
+const DEFAULT_PREFS = {
+  messages: true,
+  listings: true,
+  sales: false,
+};
+
+type Prefs = typeof DEFAULT_PREFS;
+
+const PREF_FOR_KIND: Record<Feed["kind"], keyof Prefs> = {
+  message: "messages",
+  saved: "listings",
+  sold: "sales",
+  paid: "sales",
+};
+
+async function getPrefs(userId: string): Promise<Prefs> {
+  const { data } = await admin
+    .from("profiles")
+    .select("notification_prefs")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return { ...DEFAULT_PREFS, ...(data?.notification_prefs ?? {}) };
+}
+
+export async function getUnreadNotificationCount(userId: string) {
+  const prefs = await getPrefs(userId);
+
+  const [messages, sales] = await Promise.all([
+    prefs.messages
+      ? admin
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("receiver_id", userId)
+          .eq("is_read", false)
+      : Promise.resolve({ count: 0 }),
+    prefs.sales
+      ? admin
+          .from("transactions")
+          .select("id", { count: "exact", head: true })
+          .eq("seller_id", userId)
+          .eq("status", "diproses")
+      : Promise.resolve({ count: 0 }),
+  ]);
+
+  return (messages.count ?? 0) + (sales.count ?? 0);
+}
+
 export async function getNotificationFeed(userId: string): Promise<Feed[]> {
+  const prefs = await getPrefs(userId);
+
   const [messages, sales, purchases, saves] = await Promise.all([
     admin
       .from("messages")
@@ -110,5 +160,7 @@ export async function getNotificationFeed(userId: string): Promise<Feed[]> {
     });
   }
 
-  return feed.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return feed
+    .filter((item) => prefs[PREF_FOR_KIND[item.kind]])
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

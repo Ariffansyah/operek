@@ -7,9 +7,8 @@ import { updateNotificationPrefs } from "@/lib/actions";
 
 const OPTIONS = [
   { key: "messages", label: "Pesan baru", hint: "Waktu ada yang chat kamu" },
-  { key: "listings", label: "Update iklan", hint: "Iklanmu disimpan atau mau kedaluwarsa" },
+  { key: "listings", label: "Update iklan", hint: "Waktu ada yang menyimpan iklanmu" },
   { key: "sales", label: "Penjualan", hint: "Barangmu laku atau pembayaran masuk" },
-  { key: "newsletter", label: "Newsletter", hint: "Tips jualan dan info promo dari operek" },
 ] as const;
 
 type Prefs = Record<string, boolean>;

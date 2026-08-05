@@ -87,7 +87,6 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                     messages: true,
                     listings: true,
                     sales: false,
-                    newsletter: false,
                   }
                 }
               />

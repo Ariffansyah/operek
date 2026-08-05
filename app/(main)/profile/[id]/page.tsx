@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, GraduationCap, Package, Star } from "lucide-react";
+import { BadgeCheck, GraduationCap, Heart, Package, Star } from "lucide-react";
 import { Badge, ButtonLink, Card, EmptyState } from "@/components/ui";
 import { Avatar } from "@/components/layout/header";
 import { ProductGrid } from "@/components/listings/product-card";
@@ -9,6 +9,7 @@ import {
   getListings,
   getProfile,
   getProfileStats,
+  getSavedListings,
   getReviews,
   getSavedIds,
   getSession,
@@ -17,9 +18,10 @@ import { formatRupiahShort, timeAgo } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 
 const TABS = [
-  { key: "aktif", label: "Iklan Aktif" },
-  { key: "terjual", label: "Barang Terjual" },
-  { key: "ulasan", label: "Ulasan" },
+  { key: "aktif", label: "Iklan Aktif", ownerOnly: false },
+  { key: "terjual", label: "Barang Terjual", ownerOnly: false },
+  { key: "ulasan", label: "Ulasan", ownerOnly: false },
+  { key: "disimpan", label: "Disimpan", ownerOnly: true },
 ] as const;
 
 type Review = {
@@ -37,9 +39,13 @@ export default async function ProfilePage(props: PageProps<"/profile/[id]">) {
   const profile = await getProfile(id);
   if (!profile) notFound();
 
-  const tab = (Array.isArray(params.tab) ? params.tab[0] : params.tab) || "aktif";
   const session = await getSession();
   const isOwn = session?.user.id === profile.id;
+
+  const tabs = TABS.filter((t) => !t.ownerOnly || isOwn);
+  const requested =
+    (Array.isArray(params.tab) ? params.tab[0] : params.tab) || "aktif";
+  const tab = tabs.some((t) => t.key === requested) ? requested : "aktif";
 
   const [stats, reviews, savedIds] = await Promise.all([
     getProfileStats(profile.id),
@@ -50,10 +56,12 @@ export default async function ProfilePage(props: PageProps<"/profile/[id]">) {
   const listings =
     tab === "ulasan"
       ? []
-      : await getListings({
-          sellerId: profile.id,
-          active: tab === "aktif",
-        });
+      : tab === "disimpan"
+        ? await getSavedListings(profile.id)
+        : await getListings({
+            sellerId: profile.id,
+            active: tab === "aktif",
+          });
 
   return (
     <div>
@@ -110,7 +118,7 @@ export default async function ProfilePage(props: PageProps<"/profile/[id]">) {
         </div>
 
         <nav className="mx-auto flex max-w-[1024px] gap-6 px-4 sm:px-6">
-          {TABS.map(({ key, label }) => (
+          {tabs.map(({ key, label }) => (
             <Link
               key={key}
               href={`/profile/${profile.id}${key === "aktif" ? "" : `?tab=${key}`}`}
@@ -165,15 +173,33 @@ export default async function ProfilePage(props: PageProps<"/profile/[id]">) {
           <ProductGrid listings={listings} savedIds={savedIds} />
         ) : (
           <EmptyState
-            icon={<Package className="size-5" />}
-            title={tab === "aktif" ? "Belum ada iklan aktif" : "Belum ada barang terjual"}
+            icon={
+              tab === "disimpan" ? (
+                <Heart className="size-5" />
+              ) : (
+                <Package className="size-5" />
+              )
+            }
+            title={
+              tab === "disimpan"
+                ? "Belum ada barang disimpan"
+                : tab === "aktif"
+                  ? "Belum ada iklan aktif"
+                  : "Belum ada barang terjual"
+            }
             description={
-              isOwn
-                ? "Posting iklan pertamamu dan mulai jualan."
-                : "Pengguna ini belum punya barang di sini."
+              tab === "disimpan"
+                ? "Tekan ikon hati di kartu barang untuk menyimpannya ke sini."
+                : isOwn
+                  ? "Posting iklan pertamamu dan mulai jualan."
+                  : "Pengguna ini belum punya barang di sini."
             }
             action={
-              isOwn && tab === "aktif" ? (
+              tab === "disimpan" ? (
+                <ButtonLink href="/discover" className="mt-2">
+                  Cari Barang
+                </ButtonLink>
+              ) : isOwn && tab === "aktif" ? (
                 <ButtonLink href="/sell" className="mt-2">
                   Buat Iklan
                 </ButtonLink>

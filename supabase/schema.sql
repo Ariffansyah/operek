@@ -8,7 +8,7 @@ create table profiles (
   rating numeric default 0,
   total_sold integer default 0,
   is_verified boolean default false,
-  notification_prefs jsonb default '{"messages":true,"listings":true,"sales":false,"newsletter":false}',
+  notification_prefs jsonb default '{"messages":true,"listings":true,"sales":false}',
   created_at timestamptz default now()
 );
 
