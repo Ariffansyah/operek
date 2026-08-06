@@ -12,7 +12,11 @@ import {
 import { Badge, Card, ConditionBadge, EmptyState } from "@/components/ui";
 import { TransactionActions } from "./transaction-actions";
 import { getSession, getTransactions } from "@/lib/data";
-import { formatRupiah, TRANSACTION_STATUS_STYLE } from "@/lib/utils";
+import {
+  formatRupiah,
+  TRANSACTION_STATUS_LABEL,
+  TRANSACTION_STATUS_STYLE,
+} from "@/lib/utils";
 import type { Transaction } from "@/lib/types";
 
 const TABS = [
@@ -24,16 +28,11 @@ const TABS = [
 const STATUS_ICON = {
   pending: Clock,
   diproses: Clock,
+  dikirim: Truck,
   selesai: CheckCircle2,
   dibatalkan: XCircle,
 } as const;
 
-const STATUS_LABEL = {
-  pending: "Menunggu bayar",
-  diproses: "Diproses",
-  selesai: "Selesai",
-  dibatalkan: "Dibatalkan",
-} as const;
 
 function reference(t: Transaction) {
   const year = new Date(t.created_at).getFullYear();
@@ -85,7 +84,12 @@ export default async function TransactionsPage(props: PageProps<"/transactions">
                 <li key={t.id}>
                   <Card className="overflow-hidden">
                     <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
-                      <span className="text-xs text-gray-400">{reference(t)}</span>
+                      <Link
+                        href={`/transactions/${t.id}`}
+                        className="text-xs text-gray-400 hover:text-ink-900 hover:underline"
+                      >
+                        {reference(t)}
+                      </Link>
                       <Badge
                         className={
                           isBuyer
@@ -98,7 +102,7 @@ export default async function TransactionsPage(props: PageProps<"/transactions">
                       <div className="flex-1" />
                       <Badge className={TRANSACTION_STATUS_STYLE[t.status]}>
                         <StatusIcon className="size-3" />
-                        {STATUS_LABEL[t.status]}
+                        {TRANSACTION_STATUS_LABEL[t.status]}
                       </Badge>
                     </div>
 
@@ -120,7 +124,7 @@ export default async function TransactionsPage(props: PageProps<"/transactions">
 
                       <div className="min-w-0 flex-1">
                         <Link
-                          href={`/product/${t.listing_id}`}
+                          href={`/transactions/${t.id}`}
                           className="line-clamp-1 text-sm font-semibold text-ink-900 hover:text-brand-700"
                         >
                           {t.listing?.title ?? "Barang"}

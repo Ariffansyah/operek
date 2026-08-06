@@ -8,6 +8,7 @@ create table profiles (
   rating numeric default 0,
   total_sold integer default 0,
   is_verified boolean default false,
+  is_admin boolean default false,
   notification_prefs jsonb default '{"messages":true,"listings":true,"sales":false}',
   created_at timestamptz default now()
 );
@@ -41,13 +42,14 @@ create table transactions (
   buyer_id uuid references profiles(id),
   seller_id uuid references profiles(id),
   listing_id uuid references listings(id),
-  status text check (status in ('pending','diproses','selesai','dibatalkan')) default 'pending',
+  status text check (status in ('pending','diproses','dikirim','selesai','dibatalkan')) default 'pending',
   delivery_method text,
   total integer,
   platform_fee integer,
   paymenku_invoice_id text,
   paymenku_payment_url text,
   paid_at timestamptz,
+  shipped_at timestamptz,
   created_at timestamptz default now()
 );
 
@@ -77,11 +79,31 @@ create table saved_listings (
   primary key (user_id, listing_id)
 );
 
+create table withdrawals (
+  id uuid default gen_random_uuid() primary key,
+  seller_id uuid references profiles(id) on delete cascade,
+  amount integer not null check (amount > 0),
+  bank_name text not null,
+  account_number text not null,
+  account_name text not null,
+  status text check (status in ('pending','selesai','ditolak')) default 'pending',
+  note text,
+  requested_at timestamptz default now(),
+  processed_at timestamptz
+);
+
+create index on withdrawals (seller_id, requested_at desc);
+create index on withdrawals (status, requested_at);
+
 create index on listings (category, is_active, created_at desc);
 create index on listings (seller_id);
 create index on cart_items (user_id);
 create index on transactions (buyer_id, created_at desc);
 create index on transactions (seller_id, created_at desc);
+
+create unique index transactions_one_active_per_listing
+  on transactions (listing_id)
+  where status in ('pending', 'diproses', 'dikirim', 'selesai');
 create index on messages (receiver_id, is_read);
 create index on messages (sender_id, receiver_id, listing_id, created_at);
 

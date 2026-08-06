@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2, Star } from "lucide-react";
 import { Button, Textarea } from "@/components/ui";
-import { confirmReceived, submitReview } from "@/lib/actions";
+import {
+  cancelOrder,
+  confirmReceived,
+  markShipped,
+  submitReview,
+} from "@/lib/actions";
 import { cn } from "@/lib/utils";
 
 export function TransactionActions({
@@ -25,49 +30,94 @@ export function TransactionActions({
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
-  if (status === "pending" && isBuyer && paymentUrl) {
+  const run = (fn: () => Promise<{ error?: string } | void>) =>
+    start(async () => {
+      const result = await fn();
+      setMessage(result && "error" in result ? (result.error ?? null) : null);
+      router.refresh();
+    });
+
+  if (!isBuyer) {
     return (
-      <a
-        href={paymentUrl}
-        className="mt-1 block text-xs font-semibold text-accent-600 hover:underline"
-      >
-        Bayar sekarang
-      </a>
+      <div className="mt-1 flex flex-col items-end gap-1">
+        {status === "diproses" && (
+          <>
+            <ActionButton
+              pending={pending}
+              onClick={() => run(() => markShipped(transactionId))}
+            >
+              Tandai Dikirim
+            </ActionButton>
+            <ActionButton
+              tone="muted"
+              pending={pending}
+              onClick={() => run(() => cancelOrder(transactionId))}
+            >
+              Batalkan
+            </ActionButton>
+          </>
+        )}
+        {status === "dikirim" && (
+          <span className="text-xs text-gray-500">Menunggu konfirmasi pembeli</span>
+        )}
+        {status === "pending" && (
+          <span className="text-xs text-gray-500">Menunggu pembayaran</span>
+        )}
+        <Note message={message} />
+      </div>
     );
   }
 
-  if (status === "diproses" && isBuyer) {
+  if (status === "pending") {
     return (
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          start(async () => {
-            const result = await confirmReceived(transactionId);
-            setMessage(result?.error ?? null);
-            router.refresh();
-          })
-        }
-        className="mt-1 text-xs font-semibold text-accent-600 hover:underline disabled:text-gray-400"
-      >
-        {pending ? "Menyimpan..." : "Konfirmasi terima"}
-      </button>
+      <div className="mt-1 flex flex-col items-end gap-1">
+        {paymentUrl && (
+          <a
+            href={paymentUrl}
+            className="text-xs font-semibold text-accent-600 hover:underline"
+          >
+            Bayar sekarang
+          </a>
+        )}
+        <ActionButton
+          tone="muted"
+          pending={pending}
+          onClick={() => run(() => cancelOrder(transactionId))}
+        >
+          Batalkan
+        </ActionButton>
+        <Note message={message} />
+      </div>
     );
   }
 
-  if (status === "selesai" && isBuyer) {
+  if (status === "diproses" || status === "dikirim") {
+    return (
+      <div className="mt-1 flex flex-col items-end gap-1">
+        <ActionButton
+          pending={pending}
+          onClick={() => run(() => confirmReceived(transactionId))}
+        >
+          Konfirmasi terima
+        </ActionButton>
+        <Note message={message} />
+      </div>
+    );
+  }
+
+  if (status === "selesai") {
     if (!reviewing) {
       return (
-        <>
+        <div className="mt-1 flex flex-col items-end gap-1">
           <button
             type="button"
             onClick={() => setReviewing(true)}
-            className="mt-1 text-xs font-semibold text-brand-600 hover:underline"
+            className="text-xs font-semibold text-brand-600 hover:underline"
           >
             Beri ulasan
           </button>
-          {message && <p className="mt-1 text-xs text-gray-500">{message}</p>}
-        </>
+          <Note message={message} />
+        </div>
       );
     }
 
@@ -101,18 +151,10 @@ export function TransactionActions({
           <Button
             size="sm"
             disabled={pending}
-            onClick={() =>
-              start(async () => {
-                const result = await submitReview({
-                  transactionId,
-                  rating,
-                  comment,
-                });
-                if (result?.error) setMessage(result.error);
-                setReviewing(false);
-                router.refresh();
-              })
-            }
+            onClick={() => {
+              setReviewing(false);
+              run(() => submitReview({ transactionId, rating, comment }));
+            }}
           >
             {pending && <Loader2 className="size-3 animate-spin" />}
             Kirim
@@ -121,9 +163,45 @@ export function TransactionActions({
             Batal
           </Button>
         </div>
+        <Note message={message} />
       </div>
     );
   }
 
   return null;
+}
+
+function ActionButton({
+  children,
+  onClick,
+  pending,
+  tone = "brand",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  pending: boolean;
+  tone?: "brand" | "muted";
+}) {
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={onClick}
+      className={cn(
+        "text-xs font-semibold hover:underline disabled:text-gray-400",
+        tone === "brand" ? "text-accent-600" : "text-gray-500",
+      )}
+    >
+      {pending ? "Menyimpan..." : children}
+    </button>
+  );
+}
+
+function Note({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <p aria-live="polite" className="max-w-[10rem] text-right text-xs text-red-600">
+      {message}
+    </p>
+  );
 }

@@ -1,7 +1,14 @@
 import "server-only";
 import { admin } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/supabase/server";
-import type { CartItem, Listing, Message, Profile, Transaction } from "@/lib/types";
+import type {
+  CartItem,
+  Listing,
+  Message,
+  Profile,
+  Transaction,
+  Withdrawal,
+} from "@/lib/types";
 
 const SELLER_FIELDS =
   "id, full_name, avatar_url, rating, university, status";
@@ -114,10 +121,63 @@ export async function getTransactions(userId: string, tab?: string) {
 export async function getTransaction(id: string) {
   const { data } = await admin
     .from("transactions")
-    .select("*, listing:listings(*)")
+    .select(
+      `*, listing:listings(*),
+       buyer:profiles!transactions_buyer_id_fkey(${SELLER_FIELDS}),
+       seller:profiles!transactions_seller_id_fkey(${SELLER_FIELDS})`,
+    )
     .eq("id", id)
     .maybeSingle();
   return data as Transaction | null;
+}
+
+/**
+ * Seller earnings are the item price only. The 3% platform fee stays with
+ * operek, and money already requested for withdrawal is held back.
+ */
+export async function getSellerBalance(sellerId: string) {
+  const [sales, withdrawals] = await Promise.all([
+    admin
+      .from("transactions")
+      .select("total, platform_fee")
+      .eq("seller_id", sellerId)
+      .eq("status", "selesai"),
+    admin
+      .from("withdrawals")
+      .select("amount, status")
+      .eq("seller_id", sellerId)
+      .in("status", ["pending", "selesai"]),
+  ]);
+
+  const earned = (sales.data ?? []).reduce(
+    (sum: number, t: { total: number | null; platform_fee: number | null }) =>
+      sum + ((t.total ?? 0) - (t.platform_fee ?? 0)),
+    0,
+  );
+
+  const held = (withdrawals.data ?? []).reduce(
+    (sum: number, w: { amount: number }) => sum + w.amount,
+    0,
+  );
+
+  return { earned, held, available: Math.max(0, earned - held) };
+}
+
+export async function getWithdrawals(sellerId: string) {
+  const { data } = await admin
+    .from("withdrawals")
+    .select("*")
+    .eq("seller_id", sellerId)
+    .order("requested_at", { ascending: false });
+  return (data ?? []) as Withdrawal[];
+}
+
+export async function getPendingWithdrawals() {
+  const { data } = await admin
+    .from("withdrawals")
+    .select(`*, seller:profiles!withdrawals_seller_id_fkey(${SELLER_FIELDS})`)
+    .order("requested_at", { ascending: true });
+  return (data ?? []) as Withdrawal[];
 }
 
 export async function getConversations(userId: string) {

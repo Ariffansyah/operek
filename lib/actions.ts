@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { admin } from "@/lib/supabase/admin";
 import { createClient, getUser } from "@/lib/supabase/server";
 import { createInvoice } from "@/lib/paymenku";
-import { getCart } from "@/lib/data";
-import { platformFee } from "@/lib/utils";
+import { getCart, getSellerBalance } from "@/lib/data";
+import { syncTransaction } from "@/lib/payments";
+import { MIN_WITHDRAWAL, formatRupiah, platformFee } from "@/lib/utils";
 
 async function requireUser() {
   const user = await getUser();
@@ -94,6 +95,37 @@ export async function checkout(deliveryMethod: string) {
   if (!cart.length) return { error: "Keranjang masih kosong." };
 
   const supabase = await createClient();
+  const listingIds = cart.map((item) => item.listing_id);
+
+  const { data: claimed } = await admin
+    .from("transactions")
+    .select("id, listing_id, buyer_id, status, paymenku_payment_url")
+    .in("listing_id", listingIds)
+    .in("status", ["pending", "diproses", "dikirim", "selesai"]);
+
+  for (const row of claimed ?? []) {
+    await syncTransaction(row.id as string);
+  }
+
+  const { data: stillClaimed } = await admin
+    .from("transactions")
+    .select("id, listing_id, buyer_id, status, paymenku_payment_url")
+    .in("listing_id", listingIds)
+    .in("status", ["pending", "diproses", "dikirim", "selesai"]);
+
+  const mine = (stillClaimed ?? []).find(
+    (r) => r.buyer_id === user.id && r.status === "pending",
+  );
+  if (mine?.paymenku_payment_url) {
+    redirect(mine.paymenku_payment_url as string);
+  }
+
+  if (stillClaimed?.length) {
+    return {
+      error: "Barang ini sedang diproses pembeli lain. Coba beberapa saat lagi.",
+    };
+  }
+
   const { data: profile } = await admin
     .from("profiles")
     .select("full_name")
@@ -124,6 +156,9 @@ export async function checkout(deliveryMethod: string) {
     .insert(rows)
     .select("id");
 
+  if (error?.code === "23505") {
+    return { error: "Barang ini baru saja dibeli orang lain." };
+  }
   if (error || !created?.length) return { error: "Gagal membuat transaksi." };
 
   const groupId = created[0].id;
@@ -136,29 +171,31 @@ export async function checkout(deliveryMethod: string) {
       amount: subtotal + fee,
       buyerName: profile?.full_name ?? "Pembeli",
       buyerEmail: session.user?.email ?? "",
-      description: `Pembelian ${cart.length} barang di operek`,
     });
-  } catch {
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error("[paymenku] gagal membuat transaksi:", reason);
+
     await admin
       .from("transactions")
       .delete()
       .in("id", created.map((r) => r.id));
-    return { error: "Gagal menghubungi Paymenku. Coba lagi." };
-  }
 
-  const paymentUrl =
-    (invoice.payment_url as string) ?? (invoice.invoice_url as string) ?? null;
+    return { error: `Gagal menghubungi Paymenku: ${reason.slice(0, 140)}` };
+  }
 
   await admin
     .from("transactions")
     .update({
-      paymenku_invoice_id: (invoice.id as string) ?? groupId,
-      paymenku_payment_url: paymentUrl,
+      paymenku_invoice_id: invoice.trx_id,
+      paymenku_payment_url: invoice.pay_url,
     })
     .in("id", created.map((r) => r.id));
 
-  if (!paymentUrl) return { error: "Paymenku tidak mengembalikan link pembayaran." };
-  redirect(paymentUrl);
+  if (!invoice.pay_url) {
+    return { error: "Paymenku tidak mengembalikan link pembayaran." };
+  }
+  redirect(invoice.pay_url);
 }
 
 export async function createListing(input: {
@@ -344,8 +381,13 @@ export async function confirmReceived(transactionId: string) {
     .eq("id", transactionId)
     .maybeSingle();
 
-  if (!trx || trx.buyer_id !== user.id || trx.status !== "diproses")
+  if (
+    !trx ||
+    trx.buyer_id !== user.id ||
+    !["diproses", "dikirim"].includes(trx.status as string)
+  ) {
     return { error: "Transaksi tidak bisa dikonfirmasi." };
+  }
 
   await admin.from("transactions").update({ status: "selesai" }).eq("id", transactionId);
 
@@ -361,6 +403,61 @@ export async function confirmReceived(transactionId: string) {
     .eq("id", trx.seller_id);
 
   revalidatePath("/transactions");
+  revalidatePath(`/transactions/${transactionId}`);
+  return { ok: true };
+}
+
+export async function markShipped(transactionId: string) {
+  const user = await requireUser();
+
+  const { data: trx } = await admin
+    .from("transactions")
+    .select("id, seller_id, status")
+    .eq("id", transactionId)
+    .maybeSingle();
+
+  if (!trx || trx.seller_id !== user.id || trx.status !== "diproses") {
+    return { error: "Pesanan ini tidak bisa ditandai dikirim." };
+  }
+
+  await admin
+    .from("transactions")
+    .update({ status: "dikirim", shipped_at: new Date().toISOString() })
+    .eq("id", transactionId)
+    .eq("status", "diproses");
+
+  revalidatePath("/transactions");
+  revalidatePath(`/transactions/${transactionId}`);
+  return { ok: true };
+}
+
+export async function cancelOrder(transactionId: string) {
+  const user = await requireUser();
+
+  const { data: trx } = await admin
+    .from("transactions")
+    .select("id, buyer_id, seller_id, listing_id, status")
+    .eq("id", transactionId)
+    .maybeSingle();
+
+  const isParty = trx && (trx.seller_id === user.id || trx.buyer_id === user.id);
+  if (!trx || !isParty || !["pending", "diproses"].includes(trx.status as string)) {
+    return { error: "Pesanan ini tidak bisa dibatalkan." };
+  }
+
+  await admin
+    .from("transactions")
+    .update({ status: "dibatalkan" })
+    .eq("id", transactionId)
+    .in("status", ["pending", "diproses"]);
+
+  await admin
+    .from("listings")
+    .update({ is_active: true })
+    .eq("id", trx.listing_id as string);
+
+  revalidatePath("/transactions");
+  revalidatePath(`/transactions/${transactionId}`);
   return { ok: true };
 }
 
@@ -411,6 +508,74 @@ export async function submitReview(input: {
 
   revalidatePath("/transactions");
   revalidatePath(`/profile/${trx.seller_id}`);
+  return { ok: true };
+}
+
+export async function requestWithdrawal(input: {
+  amount: number;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+}) {
+  const user = await requireUser();
+
+  const amount = Math.trunc(input.amount);
+  if (!Number.isFinite(amount) || amount < MIN_WITHDRAWAL) {
+    return { error: `Minimal pencairan ${formatRupiah(MIN_WITHDRAWAL)}.` };
+  }
+  if (!input.bankName.trim() || !input.accountNumber.trim() || !input.accountName.trim()) {
+    return { error: "Data rekening wajib diisi lengkap." };
+  }
+
+  const { available } = await getSellerBalance(user.id);
+  if (amount > available) {
+    return { error: `Saldo tidak cukup. Tersedia ${formatRupiah(available)}.` };
+  }
+
+  const { error } = await admin.from("withdrawals").insert({
+    seller_id: user.id,
+    amount,
+    bank_name: input.bankName.trim(),
+    account_number: input.accountNumber.trim(),
+    account_name: input.accountName.trim(),
+  });
+
+  if (error) return { error: "Gagal mengajukan pencairan." };
+
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+/** Admin only: mark a withdrawal as transferred or rejected. */
+export async function resolveWithdrawal(
+  withdrawalId: string,
+  status: "selesai" | "ditolak",
+  note?: string,
+) {
+  const user = await requireUser();
+
+  const { data: me } = await admin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!me?.is_admin) return { error: "Butuh akses admin." };
+
+  const { error } = await admin
+    .from("withdrawals")
+    .update({
+      status,
+      note: note?.trim() || null,
+      processed_at: new Date().toISOString(),
+    })
+    .eq("id", withdrawalId)
+    .eq("status", "pending");
+
+  if (error) return { error: "Gagal memperbarui pencairan." };
+
+  revalidatePath("/admin/withdrawals");
+  revalidatePath("/settings");
   return { ok: true };
 }
 

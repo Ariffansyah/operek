@@ -68,9 +68,32 @@ export const CATEGORY_STYLE: Record<string, string> = {
 export const TRANSACTION_STATUS_STYLE: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
   diproses: "bg-blue-50 text-blue-600",
+  dikirim: "bg-purple-50 text-purple-600",
   selesai: "bg-emerald-100 text-emerald-700",
   dibatalkan: "bg-gray-100 text-gray-600",
 };
+
+export const TRANSACTION_STATUS_LABEL: Record<string, string> = {
+  pending: "Menunggu bayar",
+  diproses: "Diproses penjual",
+  dikirim: "Sudah dikirim",
+  selesai: "Selesai",
+  dibatalkan: "Dibatalkan",
+};
+
+export const WITHDRAWAL_STATUS_STYLE: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  selesai: "bg-emerald-100 text-emerald-700",
+  ditolak: "bg-red-100 text-red-700",
+};
+
+export const WITHDRAWAL_STATUS_LABEL: Record<string, string> = {
+  pending: "Menunggu diproses",
+  selesai: "Sudah ditransfer",
+  ditolak: "Ditolak",
+};
+
+export const MIN_WITHDRAWAL = 10000;
 
 export function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();

@@ -8,6 +8,7 @@ export type Profile = {
   rating: number;
   total_sold: number;
   is_verified: boolean;
+  is_admin: boolean;
   notification_prefs: {
     messages: boolean;
     listings: boolean;
@@ -48,16 +49,31 @@ export type Transaction = {
   buyer_id: string;
   seller_id: string;
   listing_id: string;
-  status: "pending" | "diproses" | "selesai" | "dibatalkan";
+  status: "pending" | "diproses" | "dikirim" | "selesai" | "dibatalkan";
   delivery_method: string | null;
   total: number;
   platform_fee: number;
   paymenku_invoice_id: string | null;
   paymenku_payment_url: string | null;
   paid_at: string | null;
+  shipped_at: string | null;
   created_at: string;
   listing?: Listing | null;
   buyer?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+  seller?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
+};
+
+export type Withdrawal = {
+  id: string;
+  seller_id: string;
+  amount: number;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  status: "pending" | "selesai" | "ditolak";
+  note: string | null;
+  requested_at: string;
+  processed_at: string | null;
   seller?: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
 };
 

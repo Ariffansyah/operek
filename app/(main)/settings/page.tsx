@@ -1,17 +1,28 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Bell, CreditCard, Lock, LogOut, User } from "lucide-react";
+import {
+  Bell,
+  CreditCard,
+  Lock,
+  LogOut,
+  ShieldCheck,
+  User,
+  Wallet,
+} from "lucide-react";
 import { Card } from "@/components/ui";
 import { AccountForm } from "./account-form";
 import { NotificationForm } from "./notification-form";
 import { PasswordForm } from "./password-form";
 import { PaymentInfo } from "./payment-info";
 import { SignOutButton } from "./sign-out-button";
-import { getSession } from "@/lib/data";
+import { WithdrawalForm } from "./withdrawal-form";
+import { getSellerBalance, getSession, getWithdrawals } from "@/lib/data";
+import { MIN_WITHDRAWAL } from "@/lib/utils";
 
 const SECTIONS = [
   { key: "akun", label: "Akun", icon: User },
   { key: "notifikasi", label: "Notifikasi", icon: Bell },
+  { key: "pencairan", label: "Pencairan Dana", icon: Wallet },
   { key: "pembayaran", label: "Metode Pembayaran", icon: CreditCard },
   { key: "sandi", label: "Ganti Kata Sandi", icon: Lock },
 ] as const;
@@ -21,6 +32,10 @@ const HEADINGS = {
   notifikasi: {
     title: "Preferensi Notifikasi",
     subtitle: "Atur kabar apa saja yang mau kamu terima",
+  },
+  pencairan: {
+    title: "Pencairan Dana",
+    subtitle: "Cairkan hasil penjualanmu ke rekening bank",
   },
   pembayaran: {
     title: "Metode Pembayaran",
@@ -61,6 +76,17 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
               {label}
             </Link>
           ))}
+
+          {session.profile?.is_admin && (
+            <Link
+              href="/admin/withdrawals"
+              className="flex items-center gap-2.5 rounded-field px-3.5 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100"
+            >
+              <ShieldCheck className="size-4" />
+              Panel Admin
+            </Link>
+          )}
+
           <SignOutButton>
             <LogOut className="size-4" />
             Keluar
@@ -89,6 +115,13 @@ export default async function SettingsPage(props: PageProps<"/settings">) {
                     sales: false,
                   }
                 }
+              />
+            )}
+            {tab === "pencairan" && (
+              <WithdrawalForm
+                balance={await getSellerBalance(session.user.id)}
+                history={await getWithdrawals(session.user.id)}
+                minWithdrawal={MIN_WITHDRAWAL}
               />
             )}
             {tab === "pembayaran" && <PaymentInfo />}

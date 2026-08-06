@@ -8,6 +8,7 @@ const PROTECTED = [
   "/notifications",
   "/transactions",
   "/settings",
+  "/admin",
 ];
 
 export async function proxy(request: NextRequest) {

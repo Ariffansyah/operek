@@ -74,9 +74,21 @@ Site URL, bukan ke halaman yang benar.
 
 ### 4. Paymenku
 
-Arahkan webhook ke `https://domainmu.com/api/paymenku-webhook`, lalu isi
-`PAYMENKU_WEBHOOK_SECRET` dengan nilai yang sama. Request tanpa tanda tangan
-yang cocok akan ditolak.
+Base URL API-nya `https://paymenku.com/api/v1`, dan transaksi dibuat lewat
+`POST /transaction/create` dengan `channel_code: "qris"`. Kalau suatu saat
+berubah, timpa lewat env `PAYMENKU_BASE_URL`.
+
+API Key diambil dari Dashboard, menu **Settings > API Keys**. Key sandbox
+berawalan `sk_test_`, key produksi `sk_live_`. Isikan ke `PAYMENKU_SECRET_KEY`.
+
+Webhook Secret **tempatnya terpisah** dari API Key. Buka **Settings > Webhook**,
+isi URL endpoint ke `https://domainmu.com/api/paymenku-webhook`, simpan, lalu
+Webhook Secret-nya baru muncul untuk disalin ke `PAYMENKU_WEBHOOK_SECRET`.
+Selama webhook belum didaftarkan, secret itu memang belum ada.
+
+Signature-nya `HMAC-SHA256(timestamp + "." + raw_body, webhook_secret)`, dikirim
+lewat header `X-PaymenKu-Signature` dan `X-PaymenKu-Timestamp`. Request yang
+tanda tangannya tidak cocok ditolak dengan 401.
 
 ### 5. Domain non-localhost saat development
 
