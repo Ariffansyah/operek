@@ -21,7 +21,7 @@ create table listings (
   price integer not null,
   category text check (category in ('Buku','Elektronik','Furnitur','Sepeda','Pakaian','Lainnya')),
   condition text check (condition in ('Seperti Baru','Bagus','Cukup Baik','Bekas')),
-  delivery text[] default '{cod}',
+  delivery text[] default '{cod,kirim}',
   campus text,
   images text[],
   is_active boolean default true,

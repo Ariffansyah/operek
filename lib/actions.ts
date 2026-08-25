@@ -204,7 +204,7 @@ export async function createListing(input: {
   price: number;
   category: string;
   condition: string;
-  delivery: string[];
+  delivery?: string[];
   campus: string;
   images: string[];
 }) {
@@ -213,8 +213,8 @@ export async function createListing(input: {
   if (!input.title.trim()) return { error: "Judul iklan wajib diisi." };
   if (!Number.isFinite(input.price) || input.price <= 0)
     return { error: "Harga harus lebih dari nol." };
-  if (!input.delivery.length)
-    return { error: "Pilih minimal satu metode pengiriman." };
+
+  const delivery = input.delivery?.length ? input.delivery : ["cod", "kirim"];
 
   const { data, error } = await admin
     .from("listings")
@@ -225,7 +225,7 @@ export async function createListing(input: {
       price: Math.trunc(input.price),
       category: input.category,
       condition: input.condition,
-      delivery: input.delivery,
+      delivery,
       campus: input.campus || null,
       images: input.images,
     })

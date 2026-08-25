@@ -71,19 +71,18 @@ export default async function ProductPage(props: PageProps<"/product/[id]">) {
             Opsi Pengiriman
           </h2>
           <div className="mt-2 flex flex-wrap gap-2">
-            {listing.delivery?.includes("cod") && (
-              <Badge className="bg-brand-50 px-3 py-1.5 text-brand-700">
-                <Handshake className="size-3.5" />
-                Ketemuan (COD)
-              </Badge>
-            )}
-            {listing.delivery?.includes("kirim") && (
-              <Badge className="bg-blue-50 px-3 py-1.5 text-blue-600">
-                <Truck className="size-3.5" />
-                Pengiriman Mandiri
-              </Badge>
-            )}
+            <Badge className="bg-brand-50 px-3 py-1.5 text-brand-700">
+              <Handshake className="size-3.5" />
+              Ketemuan (COD)
+            </Badge>
+            <Badge className="bg-blue-50 px-3 py-1.5 text-blue-600">
+              <Truck className="size-3.5" />
+              Pengiriman Mandiri
+            </Badge>
           </div>
+          <p className="mt-2 text-xs text-gray-400">
+            Pembeli memilih metode pengiriman saat checkout.
+          </p>
 
           <DetailActions
             listingId={listing.id}

@@ -38,7 +38,6 @@ type Draft = {
   condition: string;
   description: string;
   price: string;
-  delivery: string[];
   campus: string;
 };
 
@@ -52,7 +51,6 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
     condition: "",
     description: "",
     price: "",
-    delivery: [],
     campus: defaultCampus,
   });
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +62,7 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
   const canContinue = [
     draft.images.length > 0,
     draft.title.trim() && draft.category && draft.condition,
-    Number(draft.price) > 0 && draft.delivery.length > 0 && draft.campus,
+    Number(draft.price) > 0 && draft.campus,
     true,
   ][step];
 
@@ -77,7 +75,6 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
         price: Number(draft.price),
         category: draft.category,
         condition: draft.condition,
-        delivery: draft.delivery,
         campus: draft.campus,
         images: draft.images,
       });
@@ -214,10 +211,7 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
 
         {step === 2 && (
           <section>
-            <StepHeading
-              title="Harga dan Pengiriman"
-              subtitle="Tentuin harga dan cara pengambilan barang."
-            />
+            <StepHeading title="Harga" subtitle="Tentuin harga jual barangmu." />
             <div className="mt-6 space-y-4">
               <Field label="Harga Jual (Rp)" htmlFor="price">
                 <div className="relative">
@@ -235,28 +229,6 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
                   />
                 </div>
               </Field>
-
-              <fieldset>
-                <legend className="mb-1.5 text-xs font-semibold text-ink-900">
-                  Metode Pengiriman
-                </legend>
-                <div className="space-y-3">
-                  <DeliveryCard
-                    icon={<Handshake className="size-4 text-gray-500" />}
-                    title="Ketemuan langsung (COD)"
-                    hint="Sepakati tempat dan waktu dengan pembeli"
-                    checked={draft.delivery.includes("cod")}
-                    onToggle={() => toggle("cod")}
-                  />
-                  <DeliveryCard
-                    icon={<Truck className="size-4 text-gray-500" />}
-                    title="Pengiriman Mandiri"
-                    hint="Urus pengiriman sendiri, tidak ditanggung operek"
-                    checked={draft.delivery.includes("kirim")}
-                    onToggle={() => toggle("kirim")}
-                  />
-                </div>
-              </fieldset>
 
               <Field label="Lokasi Kampus" htmlFor="campus">
                 <Select
@@ -311,19 +283,16 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
                   <p className="mt-3 text-sm text-gray-700">{draft.description}</p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {draft.delivery.includes("cod") && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                      <Handshake className="size-3" />
-                      Ketemuan
-                    </span>
-                  )}
-                  {draft.delivery.includes("kirim") && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">
-                      <Truck className="size-3" />
-                      Dikirim
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                    <Handshake className="size-3" />
+                    Ketemuan
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">
+                    <Truck className="size-3" />
+                    Dikirim
+                  </span>
                 </div>
+                <p className="mt-2 text-xs text-gray-400">Pengiriman dipilih pembeli saat checkout.</p>
               </div>
             </Card>
 
@@ -378,15 +347,6 @@ export function SellWizard({ defaultCampus }: { defaultCampus: string }) {
       </div>
     </div>
   );
-
-  function toggle(value: string) {
-    setDraft((d) => ({
-      ...d,
-      delivery: d.delivery.includes(value)
-        ? d.delivery.filter((v) => v !== value)
-        : [...d.delivery, value],
-    }));
-  }
 }
 
 function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
@@ -494,40 +454,5 @@ function PhotoStep({
         kepercayaan pembeli.
       </p>
     </section>
-  );
-}
-
-function DeliveryCard({
-  icon,
-  title,
-  hint,
-  checked,
-  onToggle,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  hint: string;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <label
-      className={cn(
-        "flex cursor-pointer gap-3 rounded-field border p-3.5 transition-colors",
-        checked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:bg-gray-50",
-      )}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onToggle}
-        className="mt-0.5 size-4 shrink-0 rounded border-gray-300 accent-brand-500"
-      />
-      <span className="shrink-0 pt-0.5">{icon}</span>
-      <span>
-        <span className="block text-sm font-semibold text-ink-900">{title}</span>
-        <span className="mt-0.5 block text-xs leading-4 text-gray-500">{hint}</span>
-      </span>
-    </label>
   );
 }
